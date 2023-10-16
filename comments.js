@@ -1,49 +1,57 @@
 // Create a web server
+// 1. Create a web server that listens on port 3000
+// 2. Respond to all requests with a file from the "public" folder
+// 3. If the file doesn't exist, respond with a 404 status code
+// 4. If the request is for the root, respond with the index.html file
+// 5. Respond to requests to POST /comments with a 201 status code
 
-// Import express
-const express = require('express');
+const http = require("http");
+const fs = require("fs");
+const path = require("path");
+const port = 3000;
+const commentsPath = path.join(__dirname, "comments.json");
 
-// Create a new express application
-const app = express();
+const server = http.createServer((req, res) => {
+  console.log(`${req.method} ${req.url}`);
 
-// Tell express to serve static files from the static/ directory
-app.use(express.static('static'));
+  const index = path.join(__dirname, "public", "index.html");
+  const publicPath = path.join(__dirname, "public");
+  const filePath = path.join(__dirname, "public", req.url);
+  const comments = require("./comments.json");
 
-// Tell express to parse URL-encoded data
-app.use(express.urlencoded({ extended: false }));
-
-// Tell express to parse JSON data
-app.use(express.json());
-
-// Start the web server on port 3000
-app.listen(3000, () => {
-  console.log('Server started at http://localhost:3000/');
-});
-
-// Create an array to store comments
-const comments = [];
-
-// Handle GET /comments
-app.get('/comments', (req, res) => {
-  // Send back the comments array as JSON
-  res.json(comments);
-});
-
-// Handle POST /comments
-app.post('/comments', (req, res) => {
-  // Read the name and comment from the request body
-  const name = req.body.name;
-  const comment = req.body.comment;
-
-  // Create a new comment object
-  const newComment = {
-    name: name,
-    comment: comment
-  };
-
-  // Add the comment to the comments array
-  comments.push(newComment);
-
-  // Send back the new comment as JSON
-  res.json(newComment);
-});
+  if (req.method === "GET" && req.url === "/comments") {
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("X-Powered-By", "bacon");
+    res.end(JSON.stringify(comments));
+  } else if (req.method === "POST" && req.url === "/comments") {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      body = JSON.parse(body);
+      comments.push(body);
+      fs.writeFile(commentsPath, JSON.stringify(comments), (err) => {
+        if (err) {
+          throw err;
+        }
+        res.statusCode = 201;
+        res.end(JSON.stringify(body));
+      });
+    });
+  } else if (req.method === "GET" && req.url === "/") {
+    fs.readFile(index, (err, data) => {
+      if (err) {
+        throw err;
+      }
+      res.setHeader("Content-Type", "text/html");
+      res.end(data);
+    });
+  } else if (req.method === "GET" && req.url !== "/") {
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.statusCode = 404;
+        res.end("File not found!");
+      } else {
+        res.setHeader("Content-Type", "text/html");
+        res.end(data);
